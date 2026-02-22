@@ -1,26 +1,31 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Footprints, Flame, Plus } from 'lucide-react'
+import { useCopilotReadable } from '@copilotkit/react-core'
+import { Footprints, Flame, Plus, Filter, X, TrendingUp } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { api } from '../api/client'
 
 export default function StepsTracker() {
-  const navigate = useNavigate()
-  const userId = localStorage.getItem('fittrack_user_id')
-
   const [steps, setSteps] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
 
   useEffect(() => {
-    if (!userId) { navigate('/'); return }
     fetchLogs()
-  }, [userId])
+
+    const handler = (e) => {
+      if (e.detail?.action === 'logSteps') fetchLogs()
+    }
+    window.addEventListener('copilot-action', handler)
+    return () => window.removeEventListener('copilot-action', handler)
+  }, [])
 
   const fetchLogs = async () => {
     try {
-      const data = await api.getStepsLogs(userId)
+      const data = await api.getStepsLogs()
       setLogs(data)
     } catch (err) {
       console.error(err)
@@ -32,7 +37,7 @@ export default function StepsTracker() {
     setError('')
     setLoading(true)
     try {
-      await api.logSteps({ user_id: parseInt(userId), steps: parseInt(steps), date })
+      await api.logSteps({ steps: parseInt(steps), date })
       setSteps('')
       await fetchLogs()
     } catch (err) {
@@ -42,10 +47,22 @@ export default function StepsTracker() {
     }
   }
 
-  // Stats
-  const totalSteps = logs.reduce((sum, l) => sum + l.steps, 0)
-  const totalCalories = logs.reduce((sum, l) => sum + l.calories_burnt, 0)
-  const avgSteps = logs.length > 0 ? Math.round(totalSteps / logs.length) : 0
+  // Filter + Stats
+  const filteredLogs = logs.filter((l) => {
+    if (filterFrom && l.date < filterFrom) return false
+    if (filterTo && l.date > filterTo) return false
+    return true
+  })
+  const totalSteps = filteredLogs.reduce((sum, l) => sum + l.steps, 0)
+  const totalCalories = filteredLogs.reduce((sum, l) => sum + l.calories_burnt, 0)
+  const avgSteps = filteredLogs.length > 0 ? Math.round(totalSteps / filteredLogs.length) : 0
+
+  useCopilotReadable({
+    description: "User's step tracking logs and summary stats",
+    value: { logs, totalSteps, totalCalories, avgSteps },
+  })
+
+
 
   return (
     <div className="page">
@@ -73,6 +90,31 @@ export default function StepsTracker() {
             <div className="stat-label">Avg Steps/Day</div>
           </div>
         </div>
+
+        {/* Steps Trend Chart */}
+        {filteredLogs.length > 1 && (
+          <div className="chart-container animate-in" style={{ animationDelay: '0.08s' }}>
+            <h3><TrendingUp size={18} style={{ color: 'var(--accent-teal)' }} /> Steps Trend</h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={[...filteredLogs].reverse()}>
+                <defs>
+                  <linearGradient id="stepsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#f9fafb' }}
+                />
+                <Area type="monotone" dataKey="steps" stroke="#2dd4bf" fill="url(#stepsGrad)" strokeWidth={2} name="Steps" />
+                <Area type="monotone" dataKey="calories_burnt" stroke="#fbbf24" fill="transparent" strokeWidth={1.5} strokeDasharray="4 4" name="Calories" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         <div className="grid-2" style={{ alignItems: 'start' }}>
           {/* Log Form */}
@@ -119,11 +161,27 @@ export default function StepsTracker() {
           {/* History */}
           <div className="animate-in" style={{ animationDelay: '0.1s' }}>
             <h3 style={{ ...styles.cardTitle, marginBottom: '1rem' }}>Step History</h3>
+
+            <div className="date-filter-bar">
+              <Filter size={16} style={{ color: 'var(--text-muted)' }} />
+              <label>From</label>
+              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+              <label>To</label>
+              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+              {(filterFrom || filterTo) && (
+                <button className="btn btn-ghost" onClick={() => { setFilterFrom(''); setFilterTo('') }}>
+                  <X size={14} /> Clear
+                </button>
+              )}
+            </div>
+
             <div className="history-list">
-              {logs.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No step logs yet</p>
+              {filteredLogs.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                  {logs.length === 0 ? 'No step logs yet' : 'No logs match the selected dates'}
+                </p>
               ) : (
-                logs.map((log) => (
+                filteredLogs.map((log) => (
                   <div key={log.id} className="history-item">
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>

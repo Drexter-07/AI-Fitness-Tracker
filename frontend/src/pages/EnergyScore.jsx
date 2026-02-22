@@ -1,25 +1,24 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useCopilotReadable } from '@copilotkit/react-core'
 import { Zap, Moon, Dumbbell, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 
 export default function EnergyScore() {
-  const navigate = useNavigate()
-  const userId = localStorage.getItem('fittrack_user_id')
-
   const [energy, setEnergy] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (!userId) { navigate('/'); return }
-  }, [userId])
+  useCopilotReadable({
+    description: "User's energy score based on sleep and workout data, including sleep factor, workout factor, and overall score (0-100)",
+    value: energy,
+  })
+
 
   const fetchScore = async () => {
     setLoading(true)
     setError('')
     try {
-      const data = await api.getEnergyScore(userId)
+      const data = await api.getEnergyScore()
       setEnergy(data)
     } catch (err) {
       setError(err.message)

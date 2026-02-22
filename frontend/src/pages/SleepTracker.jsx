@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Moon, Clock, Sparkles } from 'lucide-react'
+import { useCopilotReadable } from '@copilotkit/react-core'
+import { Moon, Clock, Sparkles, Filter, X, TrendingUp } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { api } from '../api/client'
 import AIReport from '../components/AIReport'
 
 export default function SleepTracker() {
-  const navigate = useNavigate()
-  const userId = localStorage.getItem('fittrack_user_id')
-
   const [sleepTime, setSleepTime] = useState('')
   const [wakeTime, setWakeTime] = useState('')
   const [logs, setLogs] = useState([])
@@ -15,15 +13,30 @@ export default function SleepTracker() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
+
+  useCopilotReadable({
+    description: "User's sleep logs with sleep time, wake time, and duration in hours",
+    value: logs,
+  })
+
+
 
   useEffect(() => {
-    if (!userId) { navigate('/'); return }
     fetchLogs()
-  }, [userId])
+
+    // Refresh data when AI logs sleep via global action
+    const handler = (e) => {
+      if (e.detail?.action === 'logSleep') fetchLogs()
+    }
+    window.addEventListener('copilot-action', handler)
+    return () => window.removeEventListener('copilot-action', handler)
+  }, [])
 
   const fetchLogs = async () => {
     try {
-      const data = await api.getSleepLogs(userId)
+      const data = await api.getSleepLogs()
       setLogs(data)
     } catch (err) {
       console.error(err)
@@ -35,7 +48,7 @@ export default function SleepTracker() {
     setError('')
     setLoading(true)
     try {
-      await api.logSleep({ user_id: parseInt(userId), sleep_time: sleepTime, wake_time: wakeTime })
+      await api.logSleep({ sleep_time: sleepTime, wake_time: wakeTime })
       setSleepTime('')
       setWakeTime('')
       await fetchLogs()
@@ -50,7 +63,7 @@ export default function SleepTracker() {
     setAnalysis(null)
     setAnalyzing(true)
     try {
-      const data = await api.analyzeSleep({ user_id: parseInt(userId), sleep_log_id: logId })
+      const data = await api.analyzeSleep({ sleep_log_id: logId })
       setAnalysis(data.analysis)
     } catch (err) {
       setError(err.message)
@@ -69,6 +82,22 @@ export default function SleepTracker() {
           </h1>
           <p className="page-subtitle">Log your sleep schedule and get AI-powered quality analysis.</p>
         </div>
+
+        {/* Sleep Duration Chart */}
+        {logs.length > 1 && (
+          <div className="chart-container animate-in" style={{ animationDelay: '0.06s' }}>
+            <h3><TrendingUp size={18} style={{ color: 'var(--accent-purple)' }} /> Sleep Duration Trend</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={[...logs].reverse().map(l => ({ ...l, label: l.created_at?.split('T')[0] || '' }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} unit="h" />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#f9fafb' }} />
+                <Bar dataKey="duration_hours" fill="#a78bfa" radius={[4, 4, 0, 0]} name="Duration (hrs)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         <div className="grid-2" style={{ alignItems: 'start' }}>
           {/* Log Form */}
@@ -115,11 +144,34 @@ export default function SleepTracker() {
           {/* History */}
           <div className="animate-in" style={{ animationDelay: '0.1s' }}>
             <h3 style={{ ...styles.cardTitle, marginBottom: '1rem' }}>Sleep History</h3>
+
+            <div className="date-filter-bar">
+              <Filter size={16} style={{ color: 'var(--text-muted)' }} />
+              <label>From</label>
+              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+              <label>To</label>
+              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+              {(filterFrom || filterTo) && (
+                <button className="btn btn-ghost" onClick={() => { setFilterFrom(''); setFilterTo('') }}>
+                  <X size={14} /> Clear
+                </button>
+              )}
+            </div>
+
             <div className="history-list">
-              {logs.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No sleep logs yet</p>
-              ) : (
-                logs.map((log) => (
+              {(() => {
+                const filtered = logs.filter((log) => {
+                  const d = log.created_at?.split('T')[0]
+                  if (filterFrom && d < filterFrom) return false
+                  if (filterTo && d > filterTo) return false
+                  return true
+                })
+                if (filtered.length === 0) {
+                  return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                    {logs.length === 0 ? 'No sleep logs yet' : 'No logs match the selected dates'}
+                  </p>
+                }
+                return filtered.map((log) => (
                   <div key={log.id} className="history-item">
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
@@ -138,7 +190,7 @@ export default function SleepTracker() {
                     </button>
                   </div>
                 ))
-              )}
+              })()}
             </div>
           </div>
         </div>

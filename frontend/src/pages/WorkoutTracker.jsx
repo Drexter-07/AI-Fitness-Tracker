@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Dumbbell, Flame, Sparkles, Plus } from 'lucide-react'
+import { useCopilotReadable } from '@copilotkit/react-core'
+import { Dumbbell, Flame, Sparkles, Plus, Filter, X } from 'lucide-react'
 import { api } from '../api/client'
 import AIReport from '../components/AIReport'
 
@@ -8,9 +8,6 @@ const WORKOUT_TYPES = ['walking', 'running', 'strength', 'misc']
 const INTENSITIES = ['low', 'moderate', 'high']
 
 export default function WorkoutTracker() {
-  const navigate = useNavigate()
-  const userId = localStorage.getItem('fittrack_user_id')
-
   const [workoutType, setWorkoutType] = useState('walking')
   const [duration, setDuration] = useState('')
   const [intensity, setIntensity] = useState('moderate')
@@ -20,15 +17,29 @@ export default function WorkoutTracker() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
+
+  useCopilotReadable({
+    description: "User's workout logs with exercise type, duration in minutes, intensity, and calories burnt",
+    value: logs,
+  })
+
+
 
   useEffect(() => {
-    if (!userId) { navigate('/'); return }
     fetchLogs()
-  }, [userId])
+
+    const handler = (e) => {
+      if (e.detail?.action === 'logWorkout') fetchLogs()
+    }
+    window.addEventListener('copilot-action', handler)
+    return () => window.removeEventListener('copilot-action', handler)
+  }, [])
 
   const fetchLogs = async () => {
     try {
-      const data = await api.getWorkoutLogs(userId)
+      const data = await api.getWorkoutLogs()
       setLogs(data)
     } catch (err) {
       console.error(err)
@@ -41,7 +52,6 @@ export default function WorkoutTracker() {
     setLoading(true)
     try {
       await api.logWorkout({
-        user_id: parseInt(userId),
         workout_type: workoutType,
         duration_min: parseFloat(duration),
         intensity,
@@ -61,7 +71,7 @@ export default function WorkoutTracker() {
     setAnalysis(null)
     setAnalyzing(true)
     try {
-      const data = await api.analyzeWorkout({ user_id: parseInt(userId), workout_log_id: logId })
+      const data = await api.analyzeWorkout({ workout_log_id: logId })
       setAnalysis(data.analysis)
     } catch (err) {
       setError(err.message)
@@ -161,11 +171,34 @@ export default function WorkoutTracker() {
           {/* History */}
           <div className="animate-in" style={{ animationDelay: '0.1s' }}>
             <h3 style={{ ...styles.cardTitle, marginBottom: '1rem' }}>Workout History</h3>
+
+            <div className="date-filter-bar">
+              <Filter size={16} style={{ color: 'var(--text-muted)' }} />
+              <label>From</label>
+              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+              <label>To</label>
+              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+              {(filterFrom || filterTo) && (
+                <button className="btn btn-ghost" onClick={() => { setFilterFrom(''); setFilterTo('') }}>
+                  <X size={14} /> Clear
+                </button>
+              )}
+            </div>
+
             <div className="history-list">
-              {logs.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No workouts yet</p>
-              ) : (
-                logs.map((log) => (
+              {(() => {
+                const filtered = logs.filter((log) => {
+                  const d = log.created_at?.split('T')[0]
+                  if (filterFrom && d < filterFrom) return false
+                  if (filterTo && d > filterTo) return false
+                  return true
+                })
+                if (filtered.length === 0) {
+                  return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                    {logs.length === 0 ? 'No workouts yet' : 'No workouts match the selected dates'}
+                  </p>
+                }
+                return filtered.map((log) => (
                   <div key={log.id} className="history-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
@@ -196,7 +229,7 @@ export default function WorkoutTracker() {
                     </button>
                   </div>
                 ))
-              )}
+              })()}
             </div>
           </div>
         </div>

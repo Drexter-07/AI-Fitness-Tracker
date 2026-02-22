@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 from schemas import BMIRequest, BMIResponse
+from auth_utils import get_current_user
 
 router = APIRouter(prefix="/api/bmi", tags=["BMI"])
 
@@ -26,25 +27,27 @@ def calculate_bmi(height_cm: float, weight_kg: float) -> tuple[float, str]:
 
 
 @router.post("/", response_model=BMIResponse)
-def create_bmi(req: BMIRequest, db: Session = Depends(get_db)):
-    """Calculate BMI, create a user profile, and return results."""
+def create_or_update_bmi(
+    req: BMIRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Calculate BMI and update the authenticated user's profile."""
     if req.height_cm <= 0 or req.weight_kg <= 0:
         raise HTTPException(status_code=400, detail="Height and weight must be positive numbers.")
 
     bmi_value, category = calculate_bmi(req.height_cm, req.weight_kg)
 
-    user = User(
-        height_cm=req.height_cm,
-        weight_kg=req.weight_kg,
-        bmi=bmi_value,
-        bmi_category=category,
-    )
-    db.add(user)
+    # Update existing user instead of creating a new one
+    current_user.height_cm = req.height_cm
+    current_user.weight_kg = req.weight_kg
+    current_user.bmi = bmi_value
+    current_user.bmi_category = category
     db.commit()
-    db.refresh(user)
+    db.refresh(current_user)
 
     return BMIResponse(
-        user_id=user.id,
+        user_id=current_user.id,
         bmi=bmi_value,
         bmi_category=category,
         height_cm=req.height_cm,

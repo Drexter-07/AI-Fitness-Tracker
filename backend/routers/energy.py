@@ -5,6 +5,7 @@ from datetime import date
 from database import get_db
 from models import EnergyScore, User, SleepLog, WorkoutLog
 from schemas import EnergyScoreResponse
+from auth_utils import get_current_user
 
 router = APIRouter(prefix="/api/energy", tags=["Energy Score"])
 
@@ -18,7 +19,6 @@ def compute_energy_score(sleep_logs: list, workout_logs: list) -> tuple[int, flo
     sleep_factor = 0.0
     if sleep_logs:
         avg_duration = sum(s.duration_hours for s in sleep_logs) / len(sleep_logs)
-        # Ideal sleep is 7-9 hours
         if 7 <= avg_duration <= 9:
             sleep_factor = 50.0
         elif 6 <= avg_duration < 7 or 9 < avg_duration <= 10:
@@ -28,7 +28,7 @@ def compute_energy_score(sleep_logs: list, workout_logs: list) -> tuple[int, flo
         else:
             sleep_factor = 10.0
     else:
-        sleep_factor = 25.0  # neutral if no data
+        sleep_factor = 25.0
 
     # Workout factor (0-50 points)
     workout_factor = 0.0
@@ -36,7 +36,6 @@ def compute_energy_score(sleep_logs: list, workout_logs: list) -> tuple[int, flo
         total_minutes = sum(w.duration_min for w in workout_logs)
         workout_days = len(workout_logs)
 
-        # Score based on weekly activity
         if total_minutes >= 150 and workout_days >= 3:
             workout_factor = 50.0
         elif total_minutes >= 90 and workout_days >= 2:
@@ -46,11 +45,10 @@ def compute_energy_score(sleep_logs: list, workout_logs: list) -> tuple[int, flo
         else:
             workout_factor = 10.0
     else:
-        workout_factor = 25.0  # neutral if no data
+        workout_factor = 25.0
 
     score = int(sleep_factor + workout_factor)
 
-    # Build details
     details_parts = []
     if sleep_logs:
         avg_d = sum(s.duration_hours for s in sleep_logs) / len(sleep_logs)
@@ -65,24 +63,21 @@ def compute_energy_score(sleep_logs: list, workout_logs: list) -> tuple[int, flo
         details_parts.append("No workout data recorded")
 
     details = " | ".join(details_parts)
-
     return score, sleep_factor, workout_factor, details
 
 
-@router.get("/{user_id}", response_model=EnergyScoreResponse)
-def get_energy_score(user_id: int, db: Session = Depends(get_db)):
-    """Compute and return the energy score for a user."""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    # Get recent sleep and workout logs (last 7 entries)
+@router.get("/", response_model=EnergyScoreResponse)
+def get_energy_score(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Compute and return the energy score for the authenticated user."""
     recent_sleep = db.query(SleepLog).filter(
-        SleepLog.user_id == user_id
+        SleepLog.user_id == current_user.id
     ).order_by(SleepLog.created_at.desc()).limit(7).all()
 
     recent_workouts = db.query(WorkoutLog).filter(
-        WorkoutLog.user_id == user_id
+        WorkoutLog.user_id == current_user.id
     ).order_by(WorkoutLog.created_at.desc()).limit(7).all()
 
     score, sleep_f, workout_f, details = compute_energy_score(recent_sleep, recent_workouts)
@@ -90,7 +85,7 @@ def get_energy_score(user_id: int, db: Session = Depends(get_db)):
     today = date.today().isoformat()
 
     energy = EnergyScore(
-        user_id=user_id,
+        user_id=current_user.id,
         score=score,
         sleep_factor=sleep_f,
         workout_factor=workout_f,

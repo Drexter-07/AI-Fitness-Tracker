@@ -1,0 +1,17 @@
+{
+  "name": "fittrack-copilot-runtime",
+  "version": "1.0.0",
+  "description": "Self-hosted CopilotKit runtime for FitTrack AI",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@copilotkit/runtime": "^1.8.0",
+    "express": "^4.21.0",
+    "openai": "^4.70.0",
+    "dotenv": "^16.4.0"
+  }
+}

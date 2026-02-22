@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routers import bmi, sleep, steps, workout, water, energy
+from routers import auth, bmi, sleep, steps, workout, water, energy, dashboard, reports, goals
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
@@ -23,12 +23,16 @@ app.add_middleware(
 )
 
 # Mount routers
+app.include_router(auth.router)
 app.include_router(bmi.router)
 app.include_router(sleep.router)
 app.include_router(steps.router)
 app.include_router(workout.router)
 app.include_router(water.router)
 app.include_router(energy.router)
+app.include_router(dashboard.router)
+app.include_router(reports.router)
+app.include_router(goals.router)
 
 
 @app.get("/")

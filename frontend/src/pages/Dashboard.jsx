@@ -1,6 +1,8 @@
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Moon, Footprints, Dumbbell, Droplets, Zap } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Moon, Footprints, Dumbbell, Droplets, Zap, Heart, Pencil, Flame } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { api } from '../api/client'
 import ServiceCard from '../components/ServiceCard'
 
 const services = [
@@ -46,17 +48,32 @@ const services = [
   },
 ]
 
+const todayCards = [
+  { key: 'sleep_hours', label: 'Sleep', unit: 'hrs', icon: Moon, color: 'var(--accent-purple)' },
+  { key: 'steps', label: 'Steps', unit: '', icon: Footprints, color: 'var(--accent-teal)' },
+  { key: 'calories_burnt', label: 'Calories', unit: 'kcal', icon: Flame, color: 'var(--accent-amber)' },
+  { key: 'water_glasses', label: 'Water', unit: 'glasses', icon: Droplets, color: 'var(--accent-blue)' },
+  { key: 'workout_minutes', label: 'Workout', unit: 'min', icon: Dumbbell, color: 'var(--accent-pink)' },
+]
+
 export default function Dashboard() {
-  const navigate = useNavigate()
-  const userId = localStorage.getItem('fittrack_user_id')
-  const bmi = localStorage.getItem('fittrack_bmi')
-  const bmiCategory = localStorage.getItem('fittrack_bmi_category')
+  const { user } = useAuth()
+  const [today, setToday] = useState(null)
 
   useEffect(() => {
-    if (!userId) navigate('/')
-  }, [userId, navigate])
+    api.getDashboardToday().then(setToday).catch(console.error)
+  }, [])
 
-  if (!userId) return null
+  const getBMIColor = () => {
+    if (!user?.bmi_category) return 'var(--accent-teal)'
+    switch (user.bmi_category) {
+      case 'Underweight': return 'var(--accent-amber)'
+      case 'Normal weight': return 'var(--accent-green)'
+      case 'Overweight': return 'var(--accent-amber)'
+      case 'Obese': return 'var(--accent-red)'
+      default: return 'var(--accent-teal)'
+    }
+  }
 
   return (
     <div className="page">
@@ -66,22 +83,58 @@ export default function Dashboard() {
           <div style={styles.headerTop}>
             <div>
               <h1 className="page-title">
-                Welcome back <span className="gradient-text">👋</span>
+                Welcome back, <span className="gradient-text">{user?.name || 'User'} 👋</span>
               </h1>
               <p className="page-subtitle">Track your fitness journey with AI-powered insights.</p>
             </div>
-            <div style={styles.bmiCard}>
-              <span style={styles.bmiLabel}>Your BMI</span>
-              <span style={styles.bmiValue}>{bmi}</span>
-              <span className="badge badge-teal">{bmiCategory}</span>
-            </div>
+
+            {/* Clickable BMI card → links to /bmi */}
+            <Link to="/bmi" style={{ textDecoration: 'none' }}>
+              <div style={styles.bmiCard}>
+                <div style={styles.bmiTop}>
+                  <span style={styles.bmiLabel}>Your BMI</span>
+                  <Pencil size={12} style={{ color: 'var(--text-muted)' }} />
+                </div>
+                <span style={{ ...styles.bmiValue, color: getBMIColor() }}>
+                  {user?.bmi || '—'}
+                </span>
+                <span className="badge" style={{
+                  background: `${getBMIColor()}20`,
+                  color: getBMIColor(),
+                }}>
+                  {user?.bmi_category || 'Click to set'}
+                </span>
+              </div>
+            </Link>
           </div>
         </div>
+
+        {/* Today's Summary */}
+        {today && (
+          <div className="animate-in" style={{ animationDelay: '0.06s', marginBottom: '2rem' }}>
+            <h3 style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>
+              Today's Progress
+            </h3>
+            <div className="grid-5 today-stats-row">
+              {todayCards.map(({ key, label, unit, icon: Icon, color }) => (
+                <div key={key} className="glass-card today-stat-card">
+                  <Icon size={18} style={{ color, marginBottom: '0.375rem' }} />
+                  <div className="today-stat-value" style={{ color }}>
+                    {key === 'steps' ? (today[key] || 0).toLocaleString() : (today[key] || 0)}
+                  </div>
+                  <div className="today-stat-label">
+                    {unit ? `${label} (${unit})` : label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Services Grid */}
         <div style={styles.grid}>
           {services.map((service, i) => (
-            <div key={service.path} className="animate-in" style={{ animationDelay: `${i * 0.08}s` }}>
+            <div key={service.path} className="animate-in" style={{ animationDelay: `${(i + 2) * 0.08}s` }}>
               <ServiceCard {...service} />
             </div>
           ))}
@@ -108,6 +161,16 @@ const styles = {
     borderRadius: 'var(--radius-md)',
     background: 'var(--bg-glass)',
     border: '1px solid var(--border-glass)',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    minWidth: '120px',
+  },
+  bmiTop: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    width: '100%',
+    justifyContent: 'center',
   },
   bmiLabel: {
     fontSize: '0.6875rem',
@@ -119,7 +182,6 @@ const styles = {
   bmiValue: {
     fontSize: '2rem',
     fontWeight: 900,
-    color: 'var(--accent-teal)',
     lineHeight: 1,
   },
   grid: {

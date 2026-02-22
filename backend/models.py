@@ -9,10 +9,15 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    height_cm = Column(Float, nullable=False)
-    weight_kg = Column(Float, nullable=False)
-    bmi = Column(Float, nullable=False)
-    bmi_category = Column(String(50), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)  # null for Google-only users
+    auth_provider = Column(String(20), default="local")  # "local" or "google"
+    google_id = Column(String(255), unique=True, nullable=True)
+    height_cm = Column(Float, nullable=True)
+    weight_kg = Column(Float, nullable=True)
+    bmi = Column(Float, nullable=True)
+    bmi_category = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     sleep_logs = relationship("SleepLog", back_populates="user")
@@ -20,6 +25,8 @@ class User(Base):
     workout_logs = relationship("WorkoutLog", back_populates="user")
     water_logs = relationship("WaterLog", back_populates="user")
     energy_scores = relationship("EnergyScore", back_populates="user")
+    weekly_reports = relationship("WeeklyReport", back_populates="user")
+    goals = relationship("UserGoal", back_populates="user", uselist=False)
 
 
 class SleepLog(Base):
@@ -90,3 +97,30 @@ class EnergyScore(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="energy_scores")
+
+
+class WeeklyReport(Base):
+    __tablename__ = "weekly_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    week_start = Column(String(20), nullable=False)
+    week_end = Column(String(20), nullable=False)
+    report_text = Column(Text, nullable=False)
+    summary_stats = Column(Text, nullable=True)  # JSON string
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="weekly_reports")
+
+
+class UserGoal(Base):
+    __tablename__ = "user_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    step_goal = Column(Integer, default=10000)
+    sleep_goal = Column(Float, default=8.0)
+    water_goal = Column(Integer, default=8)
+    calorie_goal = Column(Integer, default=2500)
+
+    user = relationship("User", back_populates="goals")

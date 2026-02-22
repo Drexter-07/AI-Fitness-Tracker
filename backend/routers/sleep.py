@@ -1,50 +1,54 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from database import get_db
 from models import SleepLog, User
 from schemas import SleepLogRequest, SleepLogResponse, SleepAnalyzeRequest, AIAnalysisResponse
 from services.openai_service import analyze_sleep
+from auth_utils import get_current_user
 
 router = APIRouter(prefix="/api/sleep", tags=["Sleep"])
 
 
-def parse_time(time_str: str) -> datetime:
-    """Parse time string in various formats."""
-    formats = ["%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H:%M"]
+def parse_duration(sleep_time: str, wake_time: str) -> float:
+    """Parse sleep/wake times and return duration in hours."""
+    from datetime import datetime
+
+    formats = ["%I:%M %p", "%H:%M"]
+    st = wt = None
     for fmt in formats:
         try:
-            return datetime.strptime(time_str.strip().upper(), fmt)
+            st = datetime.strptime(sleep_time.strip().upper(), fmt)
+            break
         except ValueError:
             continue
-    raise ValueError(f"Could not parse time: {time_str}")
+    for fmt in formats:
+        try:
+            wt = datetime.strptime(wake_time.strip().upper(), fmt)
+            break
+        except ValueError:
+            continue
 
+    if not st or not wt:
+        return 8.0  # default
 
-def compute_duration(sleep_time_str: str, wake_time_str: str) -> float:
-    """Compute sleep duration in hours."""
-    sleep_t = parse_time(sleep_time_str)
-    wake_t = parse_time(wake_time_str)
-
-    # If wake time is earlier than sleep time, assume next day
-    diff = (wake_t - sleep_t).total_seconds()
-    if diff <= 0:
-        diff += 24 * 3600
-
-    return round(diff / 3600, 1)
+    diff = (wt - st).total_seconds() / 3600
+    if diff < 0:
+        diff += 24
+    return round(diff, 1)
 
 
 @router.post("/", response_model=SleepLogResponse)
-def log_sleep(req: SleepLogRequest, db: Session = Depends(get_db)):
-    """Log a sleep entry."""
-    user = db.query(User).filter(User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    duration = compute_duration(req.sleep_time, req.wake_time)
+def log_sleep(
+    req: SleepLogRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Log a sleep entry for the authenticated user."""
+    duration = parse_duration(req.sleep_time, req.wake_time)
 
     log = SleepLog(
-        user_id=req.user_id,
+        user_id=current_user.id,
         sleep_time=req.sleep_time,
         wake_time=req.wake_time,
         duration_hours=duration,
@@ -55,34 +59,40 @@ def log_sleep(req: SleepLogRequest, db: Session = Depends(get_db)):
     return log
 
 
-@router.get("/{user_id}", response_model=list[SleepLogResponse])
-def get_sleep_logs(user_id: int, db: Session = Depends(get_db)):
-    """Get all sleep logs for a user."""
-    logs = db.query(SleepLog).filter(SleepLog.user_id == user_id).order_by(SleepLog.created_at.desc()).all()
+@router.get("/", response_model=list[SleepLogResponse])
+def get_sleep_logs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all sleep logs for the authenticated user."""
+    logs = db.query(SleepLog).filter(
+        SleepLog.user_id == current_user.id
+    ).order_by(SleepLog.created_at.desc()).all()
     return logs
 
 
 @router.post("/analyze", response_model=AIAnalysisResponse)
-def analyze_sleep_endpoint(req: SleepAnalyzeRequest, db: Session = Depends(get_db)):
+def analyze_sleep_endpoint(
+    req: SleepAnalyzeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Analyze a sleep entry using OpenAI."""
-    user = db.query(User).filter(User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    sleep_log = db.query(SleepLog).filter(SleepLog.id == req.sleep_log_id).first()
+    sleep_log = db.query(SleepLog).filter(
+        SleepLog.id == req.sleep_log_id,
+        SleepLog.user_id == current_user.id,
+    ).first()
     if not sleep_log:
         raise HTTPException(status_code=404, detail="Sleep log not found.")
 
     analysis = analyze_sleep(
-        bmi=user.bmi,
-        bmi_category=user.bmi_category,
-        weight_kg=user.weight_kg,
+        bmi=current_user.bmi or 0,
+        bmi_category=current_user.bmi_category or "Unknown",
         sleep_time=sleep_log.sleep_time,
         wake_time=sleep_log.wake_time,
-        duration_hours=sleep_log.duration_hours,
+        duration=sleep_log.duration_hours,
     )
 
-    # Save analysis to the log
     sleep_log.ai_analysis = analysis
     db.commit()
 

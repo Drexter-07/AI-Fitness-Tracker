@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Droplets, Plus, Sparkles } from 'lucide-react'
+import { useCopilotReadable } from '@copilotkit/react-core'
+import { Droplets, Plus, Sparkles, Filter, X, TrendingUp } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { api } from '../api/client'
 import AIReport from '../components/AIReport'
 
 export default function WaterFitness() {
-  const navigate = useNavigate()
-  const userId = localStorage.getItem('fittrack_user_id')
-
   const [glasses, setGlasses] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [logs, setLogs] = useState([])
@@ -15,15 +13,22 @@ export default function WaterFitness() {
   const [fetchingSuggestions, setFetchingSuggestions] = useState(false)
   const [suggestions, setSuggestions] = useState(null)
   const [error, setError] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
 
   useEffect(() => {
-    if (!userId) { navigate('/'); return }
     fetchLogs()
-  }, [userId])
+
+    const handler = (e) => {
+      if (e.detail?.action === 'logWater') fetchLogs()
+    }
+    window.addEventListener('copilot-action', handler)
+    return () => window.removeEventListener('copilot-action', handler)
+  }, [])
 
   const fetchLogs = async () => {
     try {
-      const data = await api.getWaterLogs(userId)
+      const data = await api.getWaterLogs()
       setLogs(data)
     } catch (err) {
       console.error(err)
@@ -35,7 +40,7 @@ export default function WaterFitness() {
     setError('')
     setLoading(true)
     try {
-      await api.logWater({ user_id: parseInt(userId), glasses: parseInt(glasses), date })
+      await api.logWater({ glasses: parseInt(glasses), date })
       setGlasses('')
       await fetchLogs()
     } catch (err) {
@@ -49,7 +54,7 @@ export default function WaterFitness() {
     setSuggestions(null)
     setFetchingSuggestions(true)
     try {
-      const data = await api.getFitnessSuggestions(userId)
+      const data = await api.getFitnessSuggestions()
       setSuggestions(data.analysis)
     } catch (err) {
       setError(err.message)
@@ -58,8 +63,21 @@ export default function WaterFitness() {
     }
   }
 
-  const totalGlasses = logs.reduce((sum, l) => sum + l.glasses, 0)
+  // Filter + Stats
+  const filteredLogs = logs.filter((l) => {
+    if (filterFrom && l.date < filterFrom) return false
+    if (filterTo && l.date > filterTo) return false
+    return true
+  })
+  const totalGlasses = filteredLogs.reduce((sum, l) => sum + l.glasses, 0)
   const totalLiters = (totalGlasses * 0.25).toFixed(1) // approx 250ml per glass
+
+  useCopilotReadable({
+    description: "User's water intake logs and hydration summary",
+    value: { logs, totalGlasses, totalLiters },
+  })
+
+
 
   return (
     <div className="page">
@@ -83,6 +101,22 @@ export default function WaterFitness() {
             <div className="stat-label">Approx Volume</div>
           </div>
         </div>
+
+        {/* Water Intake Chart */}
+        {filteredLogs.length > 1 && (
+          <div className="chart-container animate-in" style={{ animationDelay: '0.06s' }}>
+            <h3><TrendingUp size={18} style={{ color: 'var(--accent-blue)' }} /> Daily Water Intake</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={[...filteredLogs].reverse()}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#f9fafb' }} />
+                <Bar dataKey="glasses" fill="#60a5fa" radius={[4, 4, 0, 0]} name="Glasses" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         <div className="grid-2" style={{ alignItems: 'start' }}>
           {/* Log Form */}
@@ -137,11 +171,27 @@ export default function WaterFitness() {
           {/* History */}
           <div className="animate-in" style={{ animationDelay: '0.1s' }}>
             <h3 style={{ ...styles.cardTitle, marginBottom: '1rem' }}>Water Log</h3>
+
+            <div className="date-filter-bar">
+              <Filter size={16} style={{ color: 'var(--text-muted)' }} />
+              <label>From</label>
+              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+              <label>To</label>
+              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+              {(filterFrom || filterTo) && (
+                <button className="btn btn-ghost" onClick={() => { setFilterFrom(''); setFilterTo('') }}>
+                  <X size={14} /> Clear
+                </button>
+              )}
+            </div>
+
             <div className="history-list">
-              {logs.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No water logs yet</p>
+              {filteredLogs.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                  {logs.length === 0 ? 'No water logs yet' : 'No logs match the selected dates'}
+                </p>
               ) : (
-                logs.map((log) => (
+                filteredLogs.map((log) => (
                   <div key={log.id} className="history-item">
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>

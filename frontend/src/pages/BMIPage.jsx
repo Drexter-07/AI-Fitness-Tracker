@@ -1,21 +1,25 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, ArrowRight, Heart, Moon, Footprints, Dumbbell, Droplets, Zap } from 'lucide-react'
+import { Heart, ArrowRight, ArrowLeft, Ruler, Weight } from 'lucide-react'
 import { useCopilotReadable, useCopilotAction } from '@copilotkit/react-core'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 
-export default function Landing() {
+export default function BMIPage() {
   const navigate = useNavigate()
-  const [height, setHeight] = useState('')
-  const [weight, setWeight] = useState('')
+  const { user, refreshUser } = useAuth()
+
+  const isUpdate = !!(user?.bmi)
+
+  const [height, setHeight] = useState(user?.height_cm ? String(user.height_cm) : '')
+  const [weight, setWeight] = useState(user?.weight_kg ? String(user.weight_kg) : '')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   // ── CopilotKit: expose current height/weight to the AI ──
   useCopilotReadable({
-    description: 'Current height and weight values on the BMI calculator landing page',
+    description: 'Current height and weight values on the BMI page',
     value: { height, weight, bmiResult: result },
   })
 
@@ -32,7 +36,6 @@ export default function Landing() {
       if (w !== undefined) setWeight(String(w))
     },
   })
-  const { refreshUser } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -44,7 +47,7 @@ export default function Landing() {
         weight_kg: parseFloat(weight),
       })
       setResult(data)
-      await refreshUser()  // Update auth context with new BMI
+      await refreshUser()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -62,65 +65,78 @@ export default function Landing() {
     }
   }
 
-  const features = [
-    { icon: Moon, label: 'Sleep Tracking', color: 'var(--accent-purple)' },
-    { icon: Footprints, label: 'Step Counter', color: 'var(--accent-teal)' },
-    { icon: Dumbbell, label: 'Workouts', color: 'var(--accent-pink)' },
-    { icon: Droplets, label: 'Hydration', color: 'var(--accent-blue)' },
-    { icon: Zap, label: 'Energy Score', color: 'var(--accent-amber)' },
-    { icon: Heart, label: 'AI Insights', color: 'var(--accent-red)' },
-  ]
-
   return (
-    <div style={styles.page}>
-      {/* Hero Background */}
-      <div style={styles.heroBg}>
-        <div style={styles.glowOrb1} />
-        <div style={styles.glowOrb2} />
-      </div>
-
-      <div className="container" style={styles.content}>
-        {/* Hero Section */}
-        <div style={styles.hero} className="animate-in">
-          <div style={styles.heroBadge}>
-            <Activity size={14} />
-            <span>AI-Powered Fitness Tracking</span>
-          </div>
-          <h1 style={styles.heroTitle}>
-            Your Personal<br />
-            <span className="gradient-text">Fitness Companion</span>
-          </h1>
-          <p style={styles.heroSubtitle}>
-            Track your fitness journey with AI-powered insights. Get personalized reports
-            on sleep quality, workout effectiveness, and daily energy levels.
-          </p>
-        </div>
-
-        {/* Features Strip */}
-        <div style={styles.featureStrip} className="animate-in">
-          {features.map(({ icon: Icon, label, color }) => (
-            <div key={label} style={styles.featureItem}>
-              <Icon size={18} style={{ color }} />
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>{label}</span>
+    <div className="page">
+      <div className="container">
+        {/* Header */}
+        <div className="page-header animate-in">
+          <div style={styles.headerRow}>
+            <div>
+              <h1 className="page-title">
+                <Heart size={28} style={{ color: 'var(--accent-teal)', display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} />
+                {isUpdate ? 'Update Your BMI' : 'Set Up Your BMI'}
+              </h1>
+              <p className="page-subtitle">
+                {isUpdate
+                  ? 'Update your height and weight to keep your BMI and calorie calculations accurate.'
+                  : 'Enter your measurements for an accurate BMI calculation and personalized tracking.'}
+              </p>
             </div>
-          ))}
+            {isUpdate && (
+              <button className="btn btn-secondary" onClick={() => navigate('/dashboard')} style={styles.backBtn}>
+                <ArrowLeft size={16} /> Back to Dashboard
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* BMI Form */}
-        <div style={styles.formSection} className="animate-in">
-          <div className="glass-card" style={styles.formCard}>
-            <h2 style={styles.formTitle}>
-              <Heart size={22} style={{ color: 'var(--accent-teal)' }} />
-              Start Your Journey
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9375rem' }}>
-              Enter your measurements for an accurate BMI calculation and personalized tracking.
-            </p>
+        <div style={styles.layout}>
+          {/* Current BMI card (for existing users) */}
+          {isUpdate && user?.bmi && !result && (
+            <div className="glass-card animate-in" style={styles.currentCard}>
+              <h3 style={styles.sectionTitle}>Current BMI</h3>
+              <div style={styles.currentGrid}>
+                <div style={styles.currentItem}>
+                  <span style={styles.currentLabel}>BMI Value</span>
+                  <span style={{ ...styles.currentValue, color: getBMIColor(user.bmi_category) }}>
+                    {user.bmi}
+                  </span>
+                </div>
+                <div style={styles.currentItem}>
+                  <span style={styles.currentLabel}>Category</span>
+                  <span className="badge" style={{
+                    background: `${getBMIColor(user.bmi_category)}20`,
+                    color: getBMIColor(user.bmi_category),
+                    fontSize: '0.875rem',
+                    padding: '0.375rem 1rem',
+                  }}>
+                    {user.bmi_category}
+                  </span>
+                </div>
+                <div style={styles.currentItem}>
+                  <span style={styles.currentLabel}>Height</span>
+                  <span style={styles.currentStat}>{user.height_cm} cm</span>
+                </div>
+                <div style={styles.currentItem}>
+                  <span style={styles.currentLabel}>Weight</span>
+                  <span style={styles.currentStat}>{user.weight_kg} kg</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* BMI Form */}
+          <div className="glass-card animate-in" style={{ animationDelay: '0.1s', maxWidth: '540px', margin: isUpdate ? '0' : '0 auto' }}>
+            <h3 style={styles.sectionTitle}>
+              <Ruler size={18} style={{ color: 'var(--accent-teal)' }} />
+              {isUpdate ? 'Update Measurements' : 'Enter Your Measurements'}
+            </h3>
 
             <form onSubmit={handleSubmit}>
-              <div className="grid-2" style={{ gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Height (cm)</label>
+              <div className="form-group">
+                <label className="form-label">Height (cm)</label>
+                <div style={styles.inputRow}>
+                  <Ruler size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   <input
                     type="number"
                     className="form-input"
@@ -131,10 +147,15 @@ export default function Landing() {
                     min="50"
                     max="300"
                     id="height-input"
+                    style={{ flex: 1 }}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Weight (kg)</label>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Weight (kg)</label>
+                <div style={styles.inputRow}>
+                  <Weight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   <input
                     type="number"
                     className="form-input"
@@ -145,6 +166,7 @@ export default function Landing() {
                     min="10"
                     max="500"
                     id="weight-input"
+                    style={{ flex: 1 }}
                   />
                 </div>
               </div>
@@ -163,12 +185,12 @@ export default function Landing() {
                 {loading ? (
                   <><div className="spinner" /> Calculating...</>
                 ) : (
-                  <>Calculate BMI <ArrowRight size={18} /></>
+                  <>{isUpdate ? 'Update BMI' : 'Calculate BMI'} <ArrowRight size={18} /></>
                 )}
               </button>
             </form>
 
-            {/* BMI Result */}
+            {/* Result */}
             {result && (
               <div style={styles.resultCard} className="animate-in">
                 <div style={styles.resultGrid}>
@@ -207,108 +229,67 @@ export default function Landing() {
 }
 
 const styles = {
-  page: {
-    minHeight: '100vh',
-    position: 'relative',
-    overflow: 'hidden',
-    paddingTop: '2rem',
-  },
-  heroBg: {
-    position: 'absolute',
-    inset: 0,
-    background: 'var(--gradient-hero)',
-    zIndex: -1,
-  },
-  glowOrb1: {
-    position: 'absolute',
-    top: '10%',
-    left: '20%',
-    width: '500px',
-    height: '500px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(45, 212, 191, 0.12) 0%, transparent 70%)',
-    filter: 'blur(40px)',
-    animation: 'pulse 4s ease-in-out infinite',
-  },
-  glowOrb2: {
-    position: 'absolute',
-    bottom: '20%',
-    right: '10%',
-    width: '400px',
-    height: '400px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(167, 139, 250, 0.12) 0%, transparent 70%)',
-    filter: 'blur(40px)',
-    animation: 'pulse 5s ease-in-out infinite reverse',
-  },
-  content: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  hero: {
-    textAlign: 'center',
-    maxWidth: '700px',
-    margin: '0 auto',
-    padding: '3rem 0 2rem',
-  },
-  heroBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.375rem 1rem',
-    borderRadius: '9999px',
-    background: 'rgba(45, 212, 191, 0.1)',
-    border: '1px solid rgba(45, 212, 191, 0.2)',
-    color: 'var(--accent-teal)',
-    fontSize: '0.8125rem',
-    fontWeight: 600,
-    marginBottom: '1.5rem',
-  },
-  heroTitle: {
-    fontSize: '3.5rem',
-    fontWeight: 900,
-    lineHeight: 1.1,
-    marginBottom: '1.25rem',
-    letterSpacing: '-0.02em',
-  },
-  heroSubtitle: {
-    fontSize: '1.125rem',
-    color: 'var(--text-secondary)',
-    lineHeight: 1.6,
-    maxWidth: '550px',
-    margin: '0 auto',
-  },
-  featureStrip: {
+  headerRow: {
     display: 'flex',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     flexWrap: 'wrap',
     gap: '1rem',
-    padding: '2rem 0',
   },
-  featureItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
+  backBtn: {
+    fontSize: '0.875rem',
     padding: '0.5rem 1rem',
-    borderRadius: '9999px',
-    background: 'var(--bg-glass)',
-    border: '1px solid var(--border-glass)',
   },
-  formSection: {
-    maxWidth: '540px',
-    margin: '0 auto',
-    paddingBottom: '4rem',
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+    gap: '2rem',
+    alignItems: 'start',
   },
-  formCard: {
+  currentCard: {
     padding: '2rem',
   },
-  formTitle: {
+  sectionTitle: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    fontSize: '1.5rem',
+    fontSize: '1.125rem',
     fontWeight: 700,
-    marginBottom: '0.5rem',
+    marginBottom: '1.5rem',
+  },
+  currentGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1.5rem',
+  },
+  currentItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.375rem',
+    alignItems: 'center',
+    textAlign: 'center',
+  },
+  currentLabel: {
+    fontSize: '0.6875rem',
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    fontWeight: 500,
+  },
+  currentValue: {
+    fontSize: '2.5rem',
+    fontWeight: 900,
+    lineHeight: 1,
+  },
+  currentStat: {
+    fontSize: '1.25rem',
+    fontWeight: 700,
+    color: 'var(--text-primary)',
+  },
+  inputRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
   },
   resultCard: {
     marginTop: '1.5rem',
