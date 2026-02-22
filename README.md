@@ -2,6 +2,11 @@
 
 A comprehensive fitness tracking application powered by AI to provide personalized health insights, activity logging, and dynamic goal monitoring.
 
+
+<img width="1801" height="1356" alt="image" src="https://github.com/user-attachments/assets/5eff6611-58f0-4034-8d65-da81b74fd4a4" />
+
+
+
 ## 🚀 Features
 
 - **Dashboard Overview:** Get a quick glance at your daily metrics including Steps, Sleep, Calories, Water, and Active Workout minutes.
