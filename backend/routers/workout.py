@@ -6,6 +6,7 @@ from models import WorkoutLog, User
 from schemas import WorkoutLogRequest, WorkoutLogResponse, WorkoutAnalyzeRequest, AIAnalysisResponse
 from services.openai_service import analyze_workout
 from auth_utils import get_current_user
+from rate_limiter import get_rate_limited_user
 
 router = APIRouter(prefix="/api/workout", tags=["Workout"])
 
@@ -68,7 +69,7 @@ def get_workout_logs(
 @router.post("/analyze", response_model=AIAnalysisResponse)
 def analyze_workout_endpoint(
     req: WorkoutAnalyzeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_rate_limited_user),
     db: Session = Depends(get_db),
 ):
     """Analyze a workout entry using OpenAI."""

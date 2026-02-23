@@ -75,4 +75,10 @@ def get_current_user(
             detail="User not found",
         )
 
+    # Check for expired subscriptions dynamically on access
+    if user.subscription_expires_at and user.subscription_expires_at < datetime.utcnow():
+        user.subscription_tier = "FREE"
+        user.subscription_expires_at = None
+        db.commit()
+
     return user

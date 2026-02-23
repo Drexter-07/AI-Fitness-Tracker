@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import { CopilotKit } from '@copilotkit/react-core'
 import { CopilotSidebar } from '@copilotkit/react-ui'
 import '@copilotkit/react-ui/styles.css'
 import { useAuth } from './context/AuthContext'
@@ -40,42 +42,48 @@ function PublicRoute({ children }) {
   return isAuthenticated ? <Navigate to="/dashboard" /> : children
 }
 
+/** 
+ * Intercept window.fetch to prevent CopilotKit from infinitely retrying 403 Rate Limit errors. 
+ * CopilotKit's SSE client aggressively polls when it receives HTTP error codes.
+ */
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const [resource, config] = args;
+  
+  // Only intercept CopilotKit proxy calls
+  const isCopilotReq = typeof resource === 'string' && resource.includes('/api/copilotkit');
+  
+  if (isCopilotReq) {
+    const response = await originalFetch(...args);
+    // If we hit our 403 Rate Limit cap, we throw to break their generic fetch retry loop
+    if (response.status === 403) {
+      console.warn("CopilotKit Rate Limit Hit. Stopped auto-retry.");
+      // Throwing a DOMException gracefully aborts their internal promise chain 
+      // without causing an unhandled infinite reconnect loop.
+      throw new DOMException('Rate Limit Exceeded', 'AbortError');
+    }
+    return response;
+  }
+  
+  // Normal fetch for everything else
+  return originalFetch(...args);
+};
+
 function App() {
   const { isAuthenticated } = useAuth()
   useTheme()
 
-  // Register global CopilotKit actions only when authenticated
-  useGlobalCopilotActions()
-
   return (
     <>
+      <Toaster position="top-right" />
       {isAuthenticated && <Navbar />}
       {isAuthenticated ? (
-        <CopilotSidebar
-          labels={{
-            title: "FitTrack AI Assistant",
-            initial: "Hi! 👋 I'm your FitTrack AI assistant. Ask me anything about your sleep, workouts, steps, water intake, or energy score!",
-            placeholder: "Ask about your fitness data…",
-          }}
-          defaultOpen={false}
-          clickOutsideToClose={true}
+        <CopilotKit 
+          runtimeUrl="/api/copilotkit" 
+          headers={{ Authorization: `Bearer ${localStorage.getItem('fittrack_token')}` }}
         >
-          <Routes>
-            <Route path="/" element={<ProtectedRoute><BMIGate><Landing /></BMIGate></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><BMIGate><Dashboard /></BMIGate></ProtectedRoute>} />
-            <Route path="/bmi" element={<ProtectedRoute><BMIPage /></ProtectedRoute>} />
-            <Route path="/sleep" element={<ProtectedRoute><BMIGate><SleepTracker /></BMIGate></ProtectedRoute>} />
-            <Route path="/steps" element={<ProtectedRoute><BMIGate><StepsTracker /></BMIGate></ProtectedRoute>} />
-            <Route path="/workout" element={<ProtectedRoute><BMIGate><WorkoutTracker /></BMIGate></ProtectedRoute>} />
-            <Route path="/water" element={<ProtectedRoute><BMIGate><WaterFitness /></BMIGate></ProtectedRoute>} />
-            <Route path="/energy" element={<ProtectedRoute><BMIGate><EnergyScore /></BMIGate></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><BMIGate><ProfilePage /></BMIGate></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute><BMIGate><ReportsPage /></BMIGate></ProtectedRoute>} />
-            <Route path="/login" element={<Navigate to="/dashboard" />} />
-            <Route path="/register" element={<Navigate to="/dashboard" />} />
-            <Route path="*" element={<Navigate to="/dashboard" />} />
-          </Routes>
-        </CopilotSidebar>
+          <CopilotApp />
+        </CopilotKit>
       ) : (
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -84,6 +92,39 @@ function App() {
         </Routes>
       )}
     </>
+  )
+}
+
+function CopilotApp() {
+  // Register global CopilotKit actions only when authenticated AND inside the Provider!
+  useGlobalCopilotActions()
+
+  return (
+    <CopilotSidebar
+      labels={{
+        title: "FitTrack AI Assistant",
+        initial: "Hi! 👋 I'm your FitTrack AI assistant. Ask me anything about your sleep, workouts, steps, water intake, or energy score!",
+        placeholder: "Ask about your fitness data…",
+      }}
+      defaultOpen={false}
+      clickOutsideToClose={true}
+    >
+      <Routes>
+        <Route path="/" element={<ProtectedRoute><BMIGate><Landing /></BMIGate></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><BMIGate><Dashboard /></BMIGate></ProtectedRoute>} />
+        <Route path="/bmi" element={<ProtectedRoute><BMIPage /></ProtectedRoute>} />
+        <Route path="/sleep" element={<ProtectedRoute><BMIGate><SleepTracker /></BMIGate></ProtectedRoute>} />
+        <Route path="/steps" element={<ProtectedRoute><BMIGate><StepsTracker /></BMIGate></ProtectedRoute>} />
+        <Route path="/workout" element={<ProtectedRoute><BMIGate><WorkoutTracker /></BMIGate></ProtectedRoute>} />
+        <Route path="/water" element={<ProtectedRoute><BMIGate><WaterFitness /></BMIGate></ProtectedRoute>} />
+        <Route path="/energy" element={<ProtectedRoute><BMIGate><EnergyScore /></BMIGate></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><BMIGate><ProfilePage /></BMIGate></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><BMIGate><ReportsPage /></BMIGate></ProtectedRoute>} />
+        <Route path="/login" element={<Navigate to="/dashboard" />} />
+        <Route path="/register" element={<Navigate to="/dashboard" />} />
+        <Route path="*" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </CopilotSidebar>
   )
 }
 

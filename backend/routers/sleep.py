@@ -6,6 +6,7 @@ from models import SleepLog, User
 from schemas import SleepLogRequest, SleepLogResponse, SleepAnalyzeRequest, AIAnalysisResponse
 from services.openai_service import analyze_sleep
 from auth_utils import get_current_user
+from rate_limiter import get_rate_limited_user
 
 router = APIRouter(prefix="/api/sleep", tags=["Sleep"])
 
@@ -74,7 +75,7 @@ def get_sleep_logs(
 @router.post("/analyze", response_model=AIAnalysisResponse)
 def analyze_sleep_endpoint(
     req: SleepAnalyzeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_rate_limited_user),
     db: Session = Depends(get_db),
 ):
     """Analyze a sleep entry using OpenAI."""
@@ -86,11 +87,12 @@ def analyze_sleep_endpoint(
         raise HTTPException(status_code=404, detail="Sleep log not found.")
 
     analysis = analyze_sleep(
-        bmi=current_user.bmi or 0,
+        bmi=current_user.bmi or 0.0,
         bmi_category=current_user.bmi_category or "Unknown",
+        weight_kg=current_user.weight_kg or 0.0,
         sleep_time=sleep_log.sleep_time,
         wake_time=sleep_log.wake_time,
-        duration=sleep_log.duration_hours,
+        duration_hours=sleep_log.duration_hours,
     )
 
     sleep_log.ai_analysis = analysis

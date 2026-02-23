@@ -2,9 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routers import auth, bmi, sleep, steps, workout, water, energy, dashboard, reports, goals
-
-# Create all tables
+from routers import auth, dashboard, sleep, steps, workout, water, energy, reports, bmi, goals, razorpay, user, copilot
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -33,6 +31,9 @@ app.include_router(energy.router)
 app.include_router(dashboard.router)
 app.include_router(reports.router)
 app.include_router(goals.router)
+app.include_router(razorpay.router, prefix="/api/razorpay", tags=["razorpay"])
+app.include_router(user.router, prefix="/api/user", tags=["User"])
+app.include_router(copilot.router, prefix="/api/copilotkit", tags=["CopilotKit"])
 
 
 @app.get("/")

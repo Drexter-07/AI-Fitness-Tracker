@@ -18,6 +18,13 @@ class User(Base):
     weight_kg = Column(Float, nullable=True)
     bmi = Column(Float, nullable=True)
     bmi_category = Column(String(50), nullable=True)
+    
+    # Subscription & Payments
+    subscription_tier = Column(String(20), default="FREE")  # "FREE" or "WEEKLY"
+    stripe_customer_id = Column(String(255), unique=True, nullable=True)
+    razorpay_customer_id = Column(String(255), unique=True, nullable=True)
+    subscription_expires_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     sleep_logs = relationship("SleepLog", back_populates="user")
