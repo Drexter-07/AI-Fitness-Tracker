@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { CopilotKit } from '@copilotkit/react-core'
-import { CopilotSidebar } from '@copilotkit/react-ui'
+import { CopilotPopup } from '@copilotkit/react-ui'
 import '@copilotkit/react-ui/styles.css'
 import { useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
@@ -81,6 +81,7 @@ function App() {
         <CopilotKit 
           runtimeUrl="/api/copilotkit" 
           headers={{ Authorization: `Bearer ${localStorage.getItem('fittrack_token')}` }}
+          showDevConsole={false}
         >
           <CopilotApp />
         </CopilotKit>
@@ -100,7 +101,7 @@ function CopilotApp() {
   useGlobalCopilotActions()
 
   return (
-    <CopilotSidebar
+    <CopilotPopup
       labels={{
         title: "FitTrack AI Assistant",
         initial: "Hi! 👋 I'm your FitTrack AI assistant. Ask me anything about your sleep, workouts, steps, water intake, or energy score!",
@@ -124,7 +125,7 @@ function CopilotApp() {
         <Route path="/register" element={<Navigate to="/dashboard" />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Routes>
-    </CopilotSidebar>
+    </CopilotPopup>
   )
 }
 

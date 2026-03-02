@@ -14,7 +14,7 @@ venv/
 env/
 .env
 PS.txt
-
+ProductionReadinessAndRoadmap.md
 
 # SQLite database
 *.db

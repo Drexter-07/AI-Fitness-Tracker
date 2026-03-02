@@ -4,6 +4,10 @@ import redis.asyncio as redis
 from fastapi import HTTPException, status, Depends
 from routers.auth import get_current_user
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Initialize Redis connection
 # In production, this should be an environment variable
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
