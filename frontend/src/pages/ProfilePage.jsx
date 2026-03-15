@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { User, Mail, Shield, Calendar, Heart, Moon, Footprints, Dumbbell, Droplets, Pencil, Target, Check } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 
@@ -8,8 +9,10 @@ export default function ProfilePage() {
   const { user } = useAuth()
   const [stats, setStats] = useState(null)
   const [goals, setGoals] = useState(null)
+  const [usage, setUsage] = useState(null)
   const [isEditingGoals, setIsEditingGoals] = useState(false)
   const [goalForm, setGoalForm] = useState({ step_goal: 10000, sleep_goal: 8.0, water_goal: 8, calorie_goal: 2500 })
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
 
   const fetchGoals = () => {
     api.getGoals().then(res => {
@@ -25,7 +28,24 @@ export default function ProfilePage() {
 
   useEffect(() => {
     api.getProfileStats().then(setStats).catch(console.error)
+    api.getUsageStats().then((res) => {
+      setUsage(res)
+      // Intelligent fallback: if they are FREE, silently ping Razorpay 
+      // in case they had a successful payment but closed the tab early!
+      if (res.tier === 'FREE') {
+        api.verifyPayment().then((verifyRes) => {
+           if (verifyRes.status === 'success') {
+             toast.success(verifyRes.message || 'Pass activated from previous checkout!');
+             api.getUsageStats().then(setUsage).catch(console.error);
+           }
+        }).catch(() => {});
+      }
+    }).catch(console.error)
+    
     fetchGoals()
+    
+    // Check URL parameters for explicit Razorpay payment status
+    checkRazorpayStatus()
 
     // Refresh data when AI updates goals via global action
     const handler = (e) => {
@@ -59,6 +79,53 @@ export default function ProfilePage() {
       case 'Overweight': return 'var(--accent-amber)'
       case 'Obese': return 'var(--accent-red)'
       default: return 'var(--accent-teal)'
+    }
+  }
+
+  const checkRazorpayStatus = async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const razorpayStatus = urlParams.get('razorpay');
+    
+    if (razorpayStatus === 'success') {
+      try {
+        // Force the backend to query Razorpay and upgrade the account IMMEDIATELY
+        setIsCheckoutLoading(true)
+        const verifyRes = await api.verifyPayment()
+        
+        if (verifyRes.status === 'success') {
+          toast.success(verifyRes.message || 'Successfully activated 7-Day Pass!');
+          // Immediately refresh the usage state to show WEEKLY and 50 limit!
+          api.getUsageStats().then(setUsage).catch(console.error)
+        } else {
+          toast.success('Payment received. Pass will activate momentarily.');
+        }
+      } catch (err) {
+        console.error("Verification error:", err)
+        toast.error('Payment verification delayed. Please check back in a minute.');
+      } finally {
+        setIsCheckoutLoading(false)
+        // Clean URL so refresh doesn't trigger it again
+        window.history.replaceState({}, '', '/profile');
+      }
+    } else if (razorpayStatus === 'canceled') {
+      toast.error('Razorpay checkout was canceled.');
+      window.history.replaceState({}, '', '/profile');
+    }
+  };
+
+
+
+  const handleUpgrade = async () => {
+    try {
+      setIsCheckoutLoading(true)
+      const res = await api.createCheckoutSession()
+      if (res.url) {
+        window.location.href = res.url
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Failed to initiate Razorpay checkout')
+      setIsCheckoutLoading(false)
     }
   }
 
@@ -105,6 +172,36 @@ export default function ProfilePage() {
                 <Calendar size={16} style={{ color: 'var(--text-muted)' }} />
                 <span>Joined {createdDate}</span>
               </div>
+            </div>
+            
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-glass)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Active Pass:</span>
+                <span className="badge" style={{
+                  background: usage?.tier === 'WEEKLY' ? 'var(--accent-amber)' : 'var(--border-glass)',
+                  color: usage?.tier === 'WEEKLY' ? '#000' : 'var(--text-muted)',
+                  fontWeight: 700
+                }}>
+                  {usage?.tier === 'WEEKLY' ? '7-DAY PASS' : 'FREE'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>AI Requests Left Today:</span>
+                <span style={{ fontWeight: 700, color: 'var(--accent-teal)' }}>
+                  {usage?.limits ? `${usage.limits.remaining} / ${usage.limits.limit}` : '...'}
+                </span>
+              </div>
+              
+              {usage?.tier === 'FREE' && (
+                <button 
+                  className="btn btn-primary" 
+                  style={{ width: '100%', background: 'var(--accent-amber)', color: '#000' }}
+                  onClick={handleUpgrade}
+                  disabled={isCheckoutLoading}
+                >
+                  {isCheckoutLoading ? 'Redirecting to Razorpay...' : 'Buy 7-Day Pass (₹20)'}
+                </button>
+              )}
             </div>
           </div>
 

@@ -11,6 +11,7 @@ from database import get_db
 from auth_utils import get_current_user
 from models import User, SleepLog, StepsLog, WorkoutLog, WaterLog, WeeklyReport
 from schemas import WeeklyReportResponse
+from rate_limiter import get_rate_limited_user
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -151,7 +152,7 @@ Use markdown formatting with headers, bullet points, and bold text. Keep it enco
 
 @router.post("/weekly", response_model=WeeklyReportResponse)
 def generate_weekly_report(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_rate_limited_user),
     db: Session = Depends(get_db),
 ):
     """Generate a weekly fitness report using AI."""

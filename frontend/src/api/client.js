@@ -68,6 +68,7 @@ export const api = {
   // ── Water ─────────────────────────────────────
   logWater: (data) => request('/water/', { method: 'POST', body: JSON.stringify(data) }),
   getWaterLogs: () => request('/water/'),
+  getFitnessSuggestions: () => request('/water/analyze'),
 
   // ── Energy ────────────────────────────────────
   getEnergyScore: () => request('/energy/'),
@@ -86,4 +87,9 @@ export const api = {
   // ── Goals ─────────────────────────────────────────
   getGoals: () => request('/goals/'),
   updateGoals: (data) => request('/goals/', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // ── Stripe & Usage ────────────────────────────────
+  getUsageStats: () => request('/user/usage'),
+  createCheckoutSession: () => request('/razorpay/create-checkout-session', { method: 'POST' }),
+  verifyPayment: () => request('/razorpay/verify-payment', { method: 'POST' }),
 };

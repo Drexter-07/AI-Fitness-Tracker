@@ -60,6 +60,16 @@
 
   /* Navbar */
   --nav-bg: rgba(10, 14, 23, 0.85);
+
+  /* CopilotKit Overrides */
+  --copilot-kit-primary-color: var(--accent-teal);
+  --copilot-kit-contrast-color: #0a0e17;
+  --copilot-kit-background-color: var(--bg-card);
+  --copilot-kit-input-background-color: rgba(255, 255, 255, 0.05);
+  --copilot-kit-secondary-color: var(--bg-glass);
+  --copilot-kit-secondary-contrast-color: var(--text-primary);
+  --copilot-kit-separator-color: var(--border-glass);
+  --copilot-kit-muted-color: var(--text-muted);
 }
 
 /* ── Premium Light Mode Variables ────────────────────────────── */
@@ -81,10 +91,19 @@ body.light-mode {
   --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.04);
   --shadow-card-hover: 0 8px 40px rgba(0, 0, 0, 0.4);
   
-  --shadow-glow-teal: 0 0 30px rgba(45, 212, 191, 0.25);
   --shadow-glow-purple: 0 0 30px rgba(167, 139, 250, 0.25);
 
   --nav-bg: rgba(255, 255, 255, 0.85);
+
+  /* CopilotKit Overrides (Light Mode) */
+  --copilot-kit-primary-color: var(--accent-teal);
+  --copilot-kit-contrast-color: #ffffff;
+  --copilot-kit-background-color: var(--bg-card);
+  --copilot-kit-input-background-color: rgba(15, 23, 42, 0.05);
+  --copilot-kit-secondary-color: var(--bg-glass);
+  --copilot-kit-secondary-contrast-color: var(--text-primary);
+  --copilot-kit-separator-color: var(--border-glass);
+  --copilot-kit-muted-color: var(--text-muted);
 }
 
 /* ── Reset ────────────────────────────────────────────── */
@@ -1132,5 +1151,43 @@ input, select, textarea {
   .nav-last-name {
     display: none;
   }
+}
+
+/* ── CopilotKit Customizations ────────────────────────── */
+.copilotKitWindow.copilotKitWindow {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--border-glass) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-card-hover) !important;
+}
+
+.copilotKitHeader.copilotKitHeader {
+  border-top-left-radius: var(--radius-xl) !important;
+  border-top-right-radius: var(--radius-xl) !important;
+  background: transparent !important;
+  border-bottom: 1px solid var(--border-glass) !important;
+  color: var(--text-primary) !important;
+}
+
+.copilotKitInputContainer.copilotKitInputContainer {
+  background: transparent !important;
+  border-bottom-left-radius: var(--radius-xl) !important;
+  border-bottom-right-radius: var(--radius-xl) !important;
+}
+
+.copilotKitMessages.copilotKitMessages {
+  background: transparent !important;
+}
+
+.copilotKitButton.copilotKitButton {
+  background: var(--gradient-primary) !important;
+  border: none !important;
+  color: #0a0e17 !important;
+  box-shadow: var(--shadow-glow-teal) !important;
+}
+
+.copilotKitButton.copilotKitButton:hover {
+  transform: translateY(-2px) scale(1.05) !important;
 }
 
